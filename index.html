@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مصطفى ريسان</title>
+<meta name="description" content="نظام إدارة عوينات مصطفى ريسان">
+<meta name="theme-color" content="#333820">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="مصطفى ريسان">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script src="config.js"></script>
+<style>
+  :root { --olive:#333820; --olive-2:#4f5a2c; --gold:#c9a34e; --ivory:#f6f2e7; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:var(--olive); overflow:hidden; }
+  body { font-family:"Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif; color:var(--ivory);
+         padding-top:env(safe-area-inset-top, 0px); }
+  #app { display:block; width:100%; height:100%; border:0; background:var(--ivory); }
+  .screen { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+            gap:18px; padding:24px; background:var(--olive); text-align:center; transition:opacity .35s; z-index:2; }
+  .screen.gone { opacity:0; pointer-events:none; }
+  .screen img { width:132px; height:132px; filter:drop-shadow(0 6px 18px rgba(0,0,0,.35)); }
+  .screen p { margin:0; font-size:15px; opacity:.85; max-width:300px; line-height:1.6; }
+  .bar { width:120px; height:3px; border-radius:3px; background:rgba(255,255,255,.15); overflow:hidden; }
+  .bar i { display:block; width:40%; height:100%; background:var(--gold); border-radius:3px; animation:slide 1.1s ease-in-out infinite; }
+  @keyframes slide { 0%{transform:translateX(160%)} 100%{transform:translateX(-260%)} }
+  button { font:inherit; font-weight:600; border:0; border-radius:14px; padding:12px 26px; background:var(--gold); color:#2a2a14; cursor:pointer; }
+  [hidden] { display:none !important; }
+  @media (prefers-reduced-motion: reduce) { .bar i { animation:none; } }
+</style>
+</head>
+<body>
+  <iframe id="app" title="نظام عوينات مصطفى ريسان"
+          allow="clipboard-read; clipboard-write; camera; fullscreen; web-share"></iframe>
+
+  <div class="screen" id="splash">
+    <img src="icon-512.png" alt="">
+    <div class="bar" id="bar"><i></i></div>
+    <p id="msg">يفتح النظام…</p>
+    <button id="retry" hidden>حاول مرة ثانية</button>
+  </div>
+
+<script>
+(function () {
+  var frame = document.getElementById('app'),
+      splash = document.getElementById('splash'),
+      msg = document.getElementById('msg'),
+      bar = document.getElementById('bar'),
+      retry = document.getElementById('retry'),
+      timer = null;
+
+  /* رابط النظام: من config.js، ويگدر ينبدل مرة وحدة بإضافة ?app=الرابط */
+  var url = window.APP_URL;
+  try {
+    var q = new URLSearchParams(location.search).get('app');
+    if (q && /^https:\/\/script\.google\.com\//.test(q)) { localStorage.setItem('app_url', q); }
+    url = localStorage.getItem('app_url') || url;
+  } catch (e) {}
+
+  function show(text, canRetry) {
+    msg.textContent = text; retry.hidden = !canRetry; bar.hidden = canRetry;
+    splash.classList.remove('gone');
+  }
+  function open() {
+    if (!navigator.onLine) { show('ماكو إنترنت. شغّل النت وارجع حاول.', true); return; }
+    show('يفتح النظام…', false);
+    clearTimeout(timer);
+    timer = setTimeout(function () { show('النت ضعيف شوية، بعده يحمّل…', true); }, 25000);
+    frame.src = url;
+  }
+  frame.addEventListener('load', function () {
+    if (!frame.src) return;
+    clearTimeout(timer);
+    splash.classList.add('gone');
+  });
+  retry.addEventListener('click', open);
+  window.addEventListener('online', function () { if (!splash.classList.contains('gone')) open(); });
+
+  open();
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  }
+})();
+</script>
+</body>
+</html>
