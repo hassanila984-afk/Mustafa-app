@@ -32,11 +32,23 @@ function doPost(e) {
     var system = String(req.system || '').slice(0, 20000);
     var model = props.getProperty('MODEL');
 
-    return json_(gemini ? askGemini_(gemini, model || 'gemini-flash-latest', system, messages)
+    return json_(gemini ? askGeminiWithBackup_(gemini, model, system, messages)
                         : askClaude_(anthropic, model || 'claude-opus-5-5', system, messages));
   } catch (err) {
     return json_({ ok: false, error: 'relay_error', detail: String(err) });
   }
+}
+
+// The free tier is sometimes busy (503) or rate limited (429); fall back to the lighter model.
+function askGeminiWithBackup_(key, model, system, messages) {
+  var models = model ? [model] : ['gemini-flash-latest', 'gemini-flash-lite-latest'];
+  var out;
+  for (var i = 0; i < models.length; i++) {
+    out = askGemini_(key, models[i], system, messages);
+    if (out.ok || (out.error !== 'busy' && out.error !== 'rate_limited')) return out;
+  }
+  if (out.error === 'busy') out.error = 'rate_limited';
+  return out;
 }
 
 function askGemini_(key, model, system, messages) {
@@ -57,7 +69,7 @@ function askGemini_(key, model, system, messages) {
   if (code !== 200) {
     var msg = (data.error && (data.error.status || data.error.message)) || String(code);
     var bad = code === 400 && /API_KEY|api key/i.test(JSON.stringify(data.error || {}));
-    return { ok: false, error: code === 429 ? 'rate_limited' : (bad || code === 403 ? 'bad_key' : (code === 404 ? 'bad_model' : 'api_error')), detail: msg };
+    return { ok: false, error: code === 429 ? 'rate_limited' : (code === 503 || code === 500 ? 'busy' : (bad || code === 403 ? 'bad_key' : (code === 404 ? 'bad_model' : 'api_error'))), detail: msg };
   }
   var cand = (data.candidates || [])[0];
   if (!cand) return { ok: false, error: (data.promptFeedback && data.promptFeedback.blockReason) ? 'refused' : 'empty' };
