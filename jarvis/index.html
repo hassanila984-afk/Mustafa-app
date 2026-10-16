@@ -296,7 +296,7 @@ function testVoice(lg){if(V.state==="thinking")return;killRec();V.mode="off";sto
 /* =========================================================
    CONVERSATION
    ========================================================= */
-const ERR={bad_pass:"كلمة السر غلط. صححها من الإعدادات.",no_key:"الـrelay ما بي مفتاح API. ضيفه بـScript properties.",bad_key:"مفتاح الـAPI غلط أو منتهي.",
+const ERR={bad_pass:"كلمة السر غلط. صححها من الإعدادات.",no_key:"الـrelay ما بي مفتاح API. ضيفه بـScript properties.",bad_key:"مفتاح الـAPI غلط أو منتهي. انسخه من جديد وحطه بـScript properties.",bad_model:"اسم الموديل بخاصية MODEL غلط. امسح الخاصية أو صححها.",
   rate_limited:"وصلت حد الاستخدام هسه، جرّب بعد شوية.",refused:"ما گدرت أجاوب على هذا، غيّر الصياغة.",empty:"ما طلع جواب، جرّب مرة ثانية.",
   network:"ما گدرت أوصل للـrelay. تأكد من الرابط والإنترنت.",no_cfg:"لازم تحط رابط الـrelay وكلمة السر بالإعدادات."};
 const errMsg=e=>ERR[e&&e.code]||"صار خلل بالاتصال، جرّب مرة ثانية.";

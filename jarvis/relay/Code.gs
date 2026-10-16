@@ -1,15 +1,14 @@
 /**
  * Jarvis relay — Google Apps Script web app.
- * Keeps the Anthropic API key on Google's side; the Jarvis page only sends the
+ * Keeps the AI key on Google's side; the Jarvis page only sends the
  * conversation and a passcode.
  *
  * Script Properties (Project Settings → Script properties):
- *   ANTHROPIC_API_KEY  your key from console.anthropic.com
  *   PASSCODE           any secret word; the page must send the same one
- *   MODEL              optional, defaults to claude-opus-5-5
+ *   GEMINI_API_KEY     free key from https://aistudio.google.com/apikey  (used when present)
+ *   ANTHROPIC_API_KEY  paid key from https://console.anthropic.com      (used when there is no Gemini key)
+ *   MODEL              optional; defaults to gemini-flash-latest / claude-opus-5-5
  */
-var DEFAULT_MODEL = 'claude-opus-5-5';
-
 function doGet() {
   return json_({ ok: true, status: 'Jarvis relay is running' });
 }
@@ -18,9 +17,10 @@ function doPost(e) {
   try {
     var req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     var props = PropertiesService.getScriptProperties();
-    var key = props.getProperty('ANTHROPIC_API_KEY');
+    var gemini = props.getProperty('GEMINI_API_KEY');
+    var anthropic = props.getProperty('ANTHROPIC_API_KEY');
     var pass = props.getProperty('PASSCODE');
-    if (!key) return json_({ ok: false, error: 'no_key' });
+    if (!gemini && !anthropic) return json_({ ok: false, error: 'no_key' });
     if (!pass || req.pass !== pass) return json_({ ok: false, error: 'bad_pass' });
 
     var messages = (Array.isArray(req.messages) ? req.messages : [])
@@ -29,39 +29,73 @@ function doPost(e) {
       .map(function (m) { return { role: m.role, content: m.content.slice(0, 8000) }; });
     while (messages.length && messages[0].role !== 'user') messages.shift();
     if (!messages.length || messages[messages.length - 1].role !== 'user') return json_({ ok: false, error: 'bad_request' });
+    var system = String(req.system || '').slice(0, 20000);
+    var model = props.getProperty('MODEL');
 
-    var body = {
-      model: props.getProperty('MODEL') || DEFAULT_MODEL,
-      max_tokens: 2048,
-      system: String(req.system || '').slice(0, 20000),
-      messages: messages,
-      output_config: { effort: 'low' },   // quick answers for voice
-      fallbacks: 'default'                 // retry on another model if a safety check declines
-    };
-    var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
-      method: 'post',
-      contentType: 'application/json',
-      headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'server-side-fallback-2026-07-01'
-      },
-      payload: JSON.stringify(body),
-      muteHttpExceptions: true
-    });
-    var code = res.getResponseCode();
-    var data = JSON.parse(res.getContentText() || '{}');
-    if (code !== 200) {
-      var type = data && data.error && data.error.type;
-      return json_({ ok: false, error: code === 429 ? 'rate_limited' : (code === 401 ? 'bad_key' : 'api_error'), detail: type || String(code) });
-    }
-    if (data.stop_reason === 'refusal') return json_({ ok: false, error: 'refused' });
-    var text = (data.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('').trim();
-    if (!text) return json_({ ok: false, error: 'empty' });
-    return json_({ ok: true, text: text, truncated: data.stop_reason === 'max_tokens' });
+    return json_(gemini ? askGemini_(gemini, model || 'gemini-flash-latest', system, messages)
+                        : askClaude_(anthropic, model || 'claude-opus-5-5', system, messages));
   } catch (err) {
     return json_({ ok: false, error: 'relay_error', detail: String(err) });
   }
+}
+
+function askGemini_(key, model, system, messages) {
+  var body = {
+    systemInstruction: { parts: [{ text: system }] },
+    contents: messages.map(function (m) { return { role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }; }),
+    generationConfig: { maxOutputTokens: 2048 }
+  };
+  var res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-goog-api-key': key },
+    payload: JSON.stringify(body),
+    muteHttpExceptions: true
+  });
+  var code = res.getResponseCode();
+  var data = JSON.parse(res.getContentText() || '{}');
+  if (code !== 200) {
+    var msg = (data.error && (data.error.status || data.error.message)) || String(code);
+    var bad = code === 400 && /API_KEY|api key/i.test(JSON.stringify(data.error || {}));
+    return { ok: false, error: code === 429 ? 'rate_limited' : (bad || code === 403 ? 'bad_key' : (code === 404 ? 'bad_model' : 'api_error')), detail: msg };
+  }
+  var cand = (data.candidates || [])[0];
+  if (!cand) return { ok: false, error: (data.promptFeedback && data.promptFeedback.blockReason) ? 'refused' : 'empty' };
+  var text = ((cand.content && cand.content.parts) || []).filter(function (p) { return p.text && !p.thought; }).map(function (p) { return p.text; }).join('').trim();
+  if (!text) return { ok: false, error: cand.finishReason === 'SAFETY' ? 'refused' : 'empty' };
+  return { ok: true, text: text, truncated: cand.finishReason === 'MAX_TOKENS' };
+}
+
+function askClaude_(key, model, system, messages) {
+  var body = {
+    model: model,
+    max_tokens: 2048,
+    system: system,
+    messages: messages,
+    output_config: { effort: 'low' },   // quick answers for voice
+    fallbacks: 'default'                 // retry on another model if a safety check declines
+  };
+  var res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'server-side-fallback-2026-07-01'
+    },
+    payload: JSON.stringify(body),
+    muteHttpExceptions: true
+  });
+  var code = res.getResponseCode();
+  var data = JSON.parse(res.getContentText() || '{}');
+  if (code !== 200) {
+    var type = data && data.error && data.error.type;
+    return { ok: false, error: code === 429 ? 'rate_limited' : (code === 401 ? 'bad_key' : 'api_error'), detail: type || String(code) };
+  }
+  if (data.stop_reason === 'refusal') return { ok: false, error: 'refused' };
+  var text = (data.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('').trim();
+  if (!text) return { ok: false, error: 'empty' };
+  return { ok: true, text: text, truncated: data.stop_reason === 'max_tokens' };
 }
 
 function json_(obj) {

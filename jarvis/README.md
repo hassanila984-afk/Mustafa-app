@@ -3,20 +3,22 @@
 صفحة مستقلة (`jarvis/index.html`) بيها هولوگرام جارفس، تسمعك بالمايك، وترد بالصوت بالعربي أو الإنگليزي. وإذا سكتت تبقى تنتظر لحد ما تگول اسمه «جارفس».
 تحتاج تنفتح كصفحة عادية (مو داخل claude.ai)، لأن claude.ai يمنع المايك داخل صفحاته.
 
-جارفس يحچي ويا Claude عن طريق Google Apps Script، وهذا يخلي مفتاح الـAPI مخفي ومحفوظ عند Google وما يطلع بالصفحة أبد.
+جارفس يحچي ويا الذكاء الاصطناعي عن طريق Google Apps Script، وهذا يخلي المفتاح مخفي ومحفوظ عند Google وما يطلع بالصفحة أبد.
 
-## 1. مفتاح Anthropic API
-1. ادخل على https://console.anthropic.com وسوّي حساب.
-2. اشحن رصيد من **Billing**. الاستخدام بالدفع حسب الاستعمال، والمحادثات الصوتية قصيرة فكلفتها قليلة.
-3. من **API Keys** اضغط **Create Key** وانسخ المفتاح (يبدي بـ`sk-ant-`).
+## 1. مفتاح مجاني من Google Gemini (بدون فلوس)
+1. ادخل على https://aistudio.google.com/apikey بحساب Google مالتك.
+2. اضغط **Create API key**، وانسخ المفتاح (يبدي بـ`AIza`).
+3. ما يحتاج بطاقة ولا دفع. بس هذا الخيار المجاني إله حد يومي للاستخدام، وGoogle تگدر تستخدم المحادثات بالخطة المجانية حتى تحسّن خدماتها، فلا تحچي وياه بأشياء حساسة.
+
+> (اختياري، مدفوع) إذا تريد Claude بدال Gemini: سوّي مفتاح من https://console.anthropic.com واشحن رصيد، وحطه بخاصية `ANTHROPIC_API_KEY` بدال `GEMINI_API_KEY`. إذا الاثنين موجودين، الـrelay يستخدم Gemini.
 
 ## 2. الـrelay بـGoogle Apps Script
 1. ادخل على https://script.google.com واضغط **New project**.
 2. امسح الكود الموجود، والصق محتوى الملف `jarvis/relay/Code.gs`، واضغط حفظ.
 3. من **Project Settings** (أيقونة الترس) ← **Script properties** ← **Add script property**، ضيف:
-   - `ANTHROPIC_API_KEY` = المفتاح اللي نسخته
-   - `PASSCODE` = أي كلمة سر تختارها، مثلاً `hero-jarvis-2026`
-   - (اختياري) `MODEL`: الافتراضي `claude-opus-5-5`. إذا تريد أرخص وأسرع، حط `claude-haiku-5-5`.
+   - `GEMINI_API_KEY` = المفتاح اللي نسخته
+   - `PASSCODE` = أي كلمة سر تختارها
+   - (اختياري) `MODEL`: الافتراضي `gemini-flash-latest`. لا تضيفه إلا إذا تعرف شنو تريد.
 4. اضغط **Deploy** ← **New deployment** ← اختار النوع **Web app**:
    - **Execute as:** Me
    - **Who has access:** Anyone
