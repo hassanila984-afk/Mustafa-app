@@ -297,7 +297,7 @@ function testVoice(lg){if(V.state==="thinking")return;killRec();V.mode="off";sto
    CONVERSATION
    ========================================================= */
 const ERR={bad_pass:"كلمة السر غلط. صححها من الإعدادات.",no_key:"الـrelay ما بي مفتاح API. ضيفه بـScript properties.",bad_key:"مفتاح الـAPI غلط أو منتهي. انسخه من جديد وحطه بـScript properties.",bad_model:"اسم الموديل بخاصية MODEL غلط. امسح الخاصية أو صححها.",
-  rate_limited:"وصلت حد الاستخدام هسه، جرّب بعد شوية.",refused:"ما گدرت أجاوب على هذا، غيّر الصياغة.",empty:"ما طلع جواب، جرّب مرة ثانية.",
+  rate_limited:"Google مشغول أو وصلت الحد اليومي المجاني. جرّب بعد شوية.",refused:"ما گدرت أجاوب على هذا، غيّر الصياغة.",empty:"ما طلع جواب، جرّب مرة ثانية.",
   network:"ما گدرت أوصل للـrelay. تأكد من الرابط والإنترنت.",no_cfg:"لازم تحط رابط الـrelay وكلمة السر بالإعدادات."};
 const errMsg=e=>ERR[e&&e.code]||"صار خلل بالاتصال، جرّب مرة ثانية.";
 async function ask(signal){
@@ -308,6 +308,17 @@ async function ask(signal){
   let d;try{d=await r.json();}catch(e){throw {code:"network"};}
   if(!d.ok)throw {code:d.error};
   return d.text;
+}
+/* the free Gemini tier is sometimes busy for a few seconds: retry twice before giving up */
+async function askRetry(signal){
+  for(let i=0;;i++){
+    try{return await ask(signal);}
+    catch(e){
+      if(e.code!=="rate_limited"||i>=2||signal.aborted)throw e;
+      setVState("thinking",V.lang==="en"?"Google is busy, trying again…":"Google مشغول، أعيد المحاولة…");
+      await new Promise(res=>setTimeout(res,2500*(i+1)));
+    }
+  }
 }
 
 const V_MSG={ar:{idle:"اضغط الهولوگرام أو قول «جارفس»",listening:"أسمعك…",thinking:"يفكر…",speaking:"يتكلم…",standby:"على أهبة الاستعداد… قول «جارفس» وأصحى"},
@@ -413,7 +424,7 @@ async function voiceSend(text){
   stopSpeak();V.said=0;V.gen=true;V.after=null;
   setVState("thinking");V.ctl=new AbortController();
   try{
-    const reply=await ask(V.ctl.signal);
+    const reply=await askRetry(V.ctl.signal);
     HIST.push({role:"assistant",content:reply});saveHist();
     R.innerHTML=md(reply);V.ctl=null;
     feed(reply,true);
