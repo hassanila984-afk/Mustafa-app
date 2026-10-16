@@ -9,8 +9,14 @@
  *   ANTHROPIC_API_KEY  paid key from https://console.anthropic.com      (used when there is no Gemini key)
  *   MODEL              optional; defaults to gemini-flash-latest / claude-opus-5-5
  */
+var RELAY_VERSION = 3;
+
+// Opening the /exec link in a browser shows this: which version is live and which keys it can see (never the keys).
 function doGet() {
-  return json_({ ok: true, status: 'Jarvis relay is running' });
+  var props = PropertiesService.getScriptProperties();
+  return json_({ ok: true, status: 'Jarvis relay is running', version: RELAY_VERSION,
+    gemini_key: !!props.getProperty('GEMINI_API_KEY'), anthropic_key: !!props.getProperty('ANTHROPIC_API_KEY'),
+    passcode_set: !!props.getProperty('PASSCODE') });
 }
 
 function doPost(e) {
